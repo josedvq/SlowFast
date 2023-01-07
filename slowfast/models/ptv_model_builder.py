@@ -61,7 +61,7 @@ class PTVResNet(nn.Module):
     ResNet models using PyTorchVideo model builder.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, head=None):
         """
         The `__init__` method of any subclass should also contain these
             arguments.
@@ -85,6 +85,7 @@ class PTVResNet(nn.Module):
         ], f"Unsupported MODEL.ARCH type {cfg.MODEL.ARCH} for PTVResNet"
 
         self.detection_mode = cfg.DETECTION.ENABLE
+        self.head = head
         self._construct_network(cfg)
 
     def _construct_network(self, cfg):
@@ -193,7 +194,8 @@ class PTVResNet(nn.Module):
             stage_temporal_stride=(1, 1, 1, 1),
             bottleneck=create_bottleneck_block,
             # Head configs.
-            head=create_res_basic_head if not self.detection_mode else None,
+            head=None if self.head is not None else 
+                create_res_basic_head if not self.detection_mode else None,
             head_pool=nn.AvgPool3d,
             head_pool_kernel_size=(
                 cfg.DATA.NUM_FRAMES // pool_size[0][0],
@@ -204,20 +206,24 @@ class PTVResNet(nn.Module):
             head_output_with_global_average=False,
         )
 
+
+
         self.post_act = head_act
 
     def forward(self, x, bboxes=None):
-        x = x[0]
+        # x = x[0]
         x = self.model(x)
-        if self.detection_mode:
-            x = self.detection_head(x, bboxes)
-            x = self.post_act(x)
-        else:
-            # Performs fully convlutional inference.
-            if not self.training:
-                x = self.post_act(x)
-                x = x.mean([2, 3, 4])
-        x = x.view(x.shape[0], -1)
+        if self.head is not None:
+            x = self.head(x)
+        # if self.detection_mode:
+        #     x = self.detection_head(x, bboxes)
+        #     x = self.post_act(x)
+        # else:
+        #     # Performs fully convlutional inference.
+        #     if not self.training:
+        #         x = self.post_act(x)
+        #         x = x.mean([2, 3, 4])
+        # x = x.view(x.shape[0], -1)
         return x
 
 
@@ -588,7 +594,7 @@ class PTVCSN(nn.Module):
         self.post_act = get_head_act(cfg.MODEL.HEAD_ACT)
 
     def forward(self, x, bboxes=None):
-        x = x[0]
+        # x = x[0]
         x = self.model(x)
         # Performs fully convlutional inference.
         if not self.training:
